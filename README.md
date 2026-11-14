@@ -1,24 +1,50 @@
-# 🧙 Little Wizard — Potion Lab
+# 🧙‍♂️ Little Wizard — Potion Lab
 
-Jogo 2D de alquimia em Swift, GTK4 e Cairo para Linux. Primeira versão jogável: selecione dois ingredientes, prepare poções, descubra três receitas e acumule pontos.
+A cozy pixel-art potion-making game developed with **Swift, GTK4 and Cairo**.
 
-## Receitas
-- Flor lunar + Cristal azul = Poção da Lua
-- Cogumelo + Erva mística = Poção de Cura
-- Cristal azul + Erva mística = Poção de Mana
+## ✨ About the Project
 
-Cada descoberta inédita rende 50 pontos e 10 moedas. Combinações diferentes produzem uma mistura misteriosa.
+Little Wizard — Potion Lab is a small fantasy game where players become a young wizard experimenting with magical ingredients inside an enchanted laboratory.
 
-## Como rodar no Ubuntu
-Este pacote reutiliza as dependências do seu projeto RiggieSee já funcional:
+Combine ingredients, discover potion recipes, earn points and collect coins!
+
+## 🎮 Features
+
+- 🧪 Interactive potion-making system
+- 🌸 Four magical ingredients
+- ✨ Animated cauldron with bubbles and glowing particles
+- 📖 Three discoverable recipes
+- 🪙 Points and coin rewards
+- 🎨 Pixel-art-inspired graphics rendered with Cairo
+- 🐧 Desktop application for Linux
+
+## 🛠️ Technologies
+
+- Swift
+- SwiftGtk
+- GTK4
+- Cairo
+- Swift Package Manager
+
+## 🚀 Running the Game
+
+This project is developed for Linux and requires a configured Swift toolchain and the GTK4/Cairo development dependencies.
 
 ```bash
-bash setup.sh
+git clone https://github.com/Dudexmaverick/LittleWizard.git
+cd LittleWizard
 swift build -j 1
-swift run
+swift run --skip-build
 ```
 
-O arquivo `setup.sh` copia apenas a configuração SwiftPM do RiggieSee, renomeando o target para LittleWizard. Ele não modifica o projeto original.
+## 📌 Project Status
 
-## Próximas versões
-Animação do caldeirão, livro de receitas, clientes, inventário e sprites pixel art.
+🚧 Work in progress — playable prototype.
+
+Future improvements include enhanced character animations, an enchanted laboratory and an interactive potion recipe book.
+
+## 👩‍💻 Developer
+
+Developed by **Maria Eduarda Alves da Silva**.
+
+GitHub: [@Dudexmaverick](https://github.com/Dudexmaverick)

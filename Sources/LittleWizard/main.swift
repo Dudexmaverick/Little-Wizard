@@ -1,4 +1,3 @@
-
 import Gtk
 import Cairo
 import Foundation
@@ -8,41 +7,42 @@ import GLib
 
 let game = GameState()
 
-// Relogio compartilhado pelas animacoes
 let animationClock = ProcessInfo.processInfo.systemUptime
+
+var brewing = false
+var brewStartedAt = 0.0
+var activePotionColor = "turquoise"
+var brewingSelection: [String] = []
+
+let brewDuration = 2.4
 
 // MARK: - Aplicacao
 
 let status = Application.run(startupHandler: nil) { app in
 
-    // Janela principal
-
     let window = ApplicationWindowRef(application: app)
-    window.title = "Little Wizard — Potion Lab"
-    window.setDefaultSize(width: 960, height: 720)
 
-    // Layout
+    window.title = "Little Wizard — Potion Lab"
+    window.setDefaultSize(width: 960, height: 650)
 
     let layout = BoxRef(
         orientation: .vertical,
         spacing: 10
     )
 
-    // Titulo
-
     let title = LabelRef(
         str: "🧙 LITTLE WIZARD — POTION LAB 🧪"
     )
+
     layout.append(child: title)
 
-    // Placar
-
     let scoreLabel = LabelRef(
-        str: "Pontos: 0 | Moedas: 0 | Receitas: 0/3"
+        str: "Pontos: 0 | Moedas: 0 | Receitas: 0/\(game.totalRecipes)"
     )
+
     layout.append(child: scoreLabel)
 
-    // Area grafica
+    // MARK: - Area grafica
 
     let drawingArea = DrawingAreaRef()
 
@@ -50,117 +50,256 @@ let status = Application.run(startupHandler: nil) { app in
         width: 850,
         height: 430
     )
+
     drawingArea.setHexpand(expand: true)
     drawingArea.setVexpand(expand: true)
 
+    var sceneWidth = 850.0
+    var sceneHeight = 430.0
+
     drawingArea.setDrawFunc { _, context, width, height in
+
+        sceneWidth = Double(width)
+        sceneHeight = Double(height)
+
         let elapsed =
             ProcessInfo.processInfo.systemUptime
             - animationClock
+
+        let progress = brewing
+            ? min(
+                1.0,
+                (ProcessInfo.processInfo.systemUptime
+                    - brewStartedAt) / brewDuration
+            )
+            : -1.0
 
         GameRenderer.draw(
             context: context,
             width: width,
             height: height,
-            animationTime: elapsed
+            animationTime: elapsed,
+            brewProgress: progress,
+            potionColor: activePotionColor,
+            selectedIngredients: game.selected.map(\.rawValue),
+            brewingIngredients: brewing
+                ? brewingSelection
+                : []
         )
     }
 
     layout.append(child: drawingArea)
 
-    // Mensagens
+    // MARK: - Mensagens
 
     let messageLabel = LabelRef(str: game.message)
-    layout.append(child: messageLabel)
 
-    // Atualizacao da interface
+    layout.append(child: messageLabel)
 
     let refresh = {
         scoreLabel.setText(
-            str: "Pontos: \(game.score) | Moedas: \(game.coins) | Receitas: \(game.discovered.count)/3"
+            str: "Pontos: \(game.score) | Moedas: \(game.coins) | Receitas: \(game.discovered.count)/\(game.totalRecipes)"
         )
 
         messageLabel.setText(str: game.message)
         drawingArea.queueDraw()
     }
 
-    // MARK: - Ingredientes
+    // MARK: - Preparar pocao
 
-    let ingredients = BoxRef(
-        orientation: .horizontal,
-        spacing: 8
-    )
+    let preparePotion = {
 
-    let flower = ButtonRef(label: "🌸 Flor lunar")
-    let crystal = ButtonRef(label: "💎 Cristal azul")
-    let mushroom = ButtonRef(label: "🍄 Cogumelo")
-    let herb = ButtonRef(label: "🌿 Erva mistica")
+        guard !brewing else { return }
 
-    flower.onClicked { _ in
-        game.select(.flower)
+        guard game.selected.count == 2 else {
+            game.message = "Escolha dois ingredientes."
+            refresh()
+            return
+        }
+
+        let combination = Set(game.selected)
+
+        if let recipe = PotionLibrary.find(
+            ingredients: game.selected
+        ) {
+            activePotionColor = recipe.color
+        } else {
+            activePotionColor = "mystery"
+        }
+
+        brewingSelection = game.selected.map(\.rawValue)
+
+        brewStartedAt =
+            ProcessInfo.processInfo.systemUptime
+
+        brewing = true
+
+        game.message =
+            "✨ O maguinho esta preparando a pocao!"
+
         refresh()
     }
 
-    crystal.onClicked { _ in
-        game.select(.crystal)
-        refresh()
+    // MARK: - Janela de alquimia
+
+    var alchemyWindow: ApplicationWindowRef?
+
+    let showAlchemyWindow = {
+
+        guard !brewing else { return }
+        guard game.selected.count == 2 else { return }
+
+        if let existing = alchemyWindow {
+            existing.set(visible: false)
+        }
+
+        let popup = ApplicationWindowRef(application: app)
+
+        popup.title = "🧪 Mesa de Alquimia"
+        popup.setDefaultSize(width: 380, height: 220)
+
+        let popupLayout = BoxRef(
+            orientation: .vertical,
+            spacing: 12
+        )
+
+        let heading = LabelRef(
+            str: "✨ PREPARAR POCAO? ✨"
+        )
+
+        popupLayout.append(child: heading)
+
+        let selectedText = game.selected
+            .map(\.rawValue)
+            .joined(separator: " + ")
+
+        let selectedLabel = LabelRef(
+            str: selectedText
+        )
+
+        popupLayout.append(child: selectedLabel)
+
+        let buttons = BoxRef(
+            orientation: .horizontal,
+            spacing: 12
+        )
+
+        let prepare = ButtonRef(
+            label: "🧪 Preparar pocao"
+        )
+
+        let restart = ButtonRef(
+            label: "🔄 Reiniciar"
+        )
+
+        prepare.onClicked { _ in
+            popup.set(visible: false)
+            preparePotion()
+        }
+
+        restart.onClicked { _ in
+            popup.set(visible: false)
+
+            game.restart()
+            activePotionColor = "turquoise"
+            brewingSelection.removeAll()
+
+            refresh()
+        }
+
+        buttons.append(child: prepare)
+        buttons.append(child: restart)
+
+        popupLayout.append(child: buttons)
+
+        popup.set(child: popupLayout)
+        popup.set(visible: true)
+
+        alchemyWindow = popup
     }
 
-    mushroom.onClicked { _ in
-        game.select(.mushroom)
-        refresh()
+    // MARK: - Inventario clicavel
+
+    let ingredientOrder: [Ingredient] = [
+        .flower,
+        .crystal,
+        .mushroom,
+        .herb
+    ]
+
+    let clickController = InventoryClick(
+        area: drawingArea
+    ) { x, y in
+
+        guard !brewing else { return }
+
+        // Coordenadas utilizadas pelo GameRenderer.
+        let slotSize = 52.0
+        let gap = 12.0
+
+        let totalWidth =
+            slotSize * 4 + gap * 3
+
+        let left =
+            (sceneWidth - totalWidth) / 2
+
+        let top = sceneHeight * 0.835
+
+        guard y >= top,
+              y <= top + slotSize else {
+            return
+        }
+
+        for index in 0..<4 {
+
+            let slotX =
+                left + Double(index) * (slotSize + gap)
+
+            if x >= slotX &&
+               x <= slotX + slotSize {
+
+                game.select(ingredientOrder[index])
+
+                refresh()
+
+                if game.selected.count == 2 {
+                    showAlchemyWindow()
+                }
+
+                break
+            }
+        }
     }
 
-    herb.onClicked { _ in
-        game.select(.herb)
-        refresh()
+    // Mantem o controlador vivo durante a execucao.
+    withExtendedLifetime(clickController) {
+        window.set(child: layout)
+        window.set(visible: true)
     }
 
-    ingredients.append(child: flower)
-    ingredients.append(child: crystal)
-    ingredients.append(child: mushroom)
-    ingredients.append(child: herb)
-
-    layout.append(child: ingredients)
-
-    // MARK: - Preparar pocao e reiniciar
-
-    let actions = BoxRef(
-        orientation: .horizontal,
-        spacing: 8
-    )
-
-    let brew = ButtonRef(label: "🧪 Preparar pocao")
-
-    brew.onClicked { _ in
-        game.brew()
-        refresh()
-    }
-
-    let restart = ButtonRef(label: "🔄 Reiniciar")
-
-    restart.onClicked { _ in
-        game.restart()
-        refresh()
-    }
-
-    actions.append(child: brew)
-    actions.append(child: restart)
-
-    layout.append(child: actions)
-
-    // MARK: - Exibir janela
-
-    window.set(child: layout)
-    window.set(visible: true)
-
-    // MARK: - Loop de animacao
-
-    // Aproximadamente 30 quadros por segundo.
-    // Atualiza maguinho e caldeirao juntos.
+    // MARK: - Animacoes
 
     timeout(add: 33) {
+
+        if brewing {
+
+            let elapsed =
+                ProcessInfo.processInfo.systemUptime
+                - brewStartedAt
+
+            if elapsed >= brewDuration {
+
+                game.brew()
+
+                brewing = false
+                brewingSelection.removeAll()
+
+                refresh()
+            }
+        }
+
         drawingArea.queueDraw()
+
         return true
     }
 }

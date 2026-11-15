@@ -8,7 +8,11 @@ struct GameRenderer {
         context cr: Cairo.ContextRef,
         width: Int,
         height: Int,
-        animationTime: Double
+        animationTime: Double,
+        brewProgress: Double = -1,
+        potionColor: String = "turquoise",
+        selectedIngredients: [String] = [],
+        brewingIngredients: [String] = []
     ) {
         let w = Double(width)
         let h = Double(height)
@@ -121,14 +125,38 @@ struct GameRenderer {
             cr,
             cx: w * 0.52,
             cy: h * 0.62,
-            time: t
+            time: t,
+            brewProgress: brewProgress,
+            potionColor: potionColor
         )
 
         drawWizard(
             cr,
             x: w * 0.20,
             y: h * 0.59,
-            time: t
+            time: t,
+            brewProgress: brewProgress
+        )
+
+        if brewProgress >= 0 && brewProgress < 1 {
+            drawSpell(
+                cr,
+                width: w,
+                height: h,
+                time: t,
+                progress: brewProgress,
+                color: potionColor
+            )
+        }
+
+        drawInventory(
+            cr,
+            width: w,
+            height: h,
+            time: t,
+            selected: selectedIngredients,
+            brewing: brewingIngredients,
+            progress: brewProgress
         )
     }
 
@@ -335,14 +363,21 @@ struct GameRenderer {
         _ cr: Cairo.ContextRef,
         cx: Double,
         cy: Double,
-        time t: Double
+        time t: Double,
+        brewProgress: Double,
+        potionColor: String
     ) {
+        let brewing = brewProgress >= 0 && brewProgress < 1
+        let magic = potionRGB(potionColor)
         let pulse = (sin(t * 2.4) + 1.0) / 2.0
-        let wave = sin(t * 3.0) * 3.0
+        let wave = sin(t * (brewing ? 11.0 : 3.0))
+            * (brewing ? 7.0 : 3.0)
 
         cr.setSource(
-            red: 0.18, green: 0.88, blue: 0.70,
-            alpha: 0.08 + pulse * 0.15
+            red: brewing ? magic.0 : 0.18,
+            green: brewing ? magic.1 : 0.88,
+            blue: brewing ? magic.2 : 0.70,
+            alpha: brewing ? 0.38 : 0.08 + pulse * 0.15
         )
         cr.rectangle(
             x: cx - 108, y: cy - 47,
@@ -365,9 +400,9 @@ struct GameRenderer {
         cr.fill()
 
         cr.setSource(
-            red: 0.25 + pulse * 0.12,
-            green: 0.83 + pulse * 0.10,
-            blue: 0.69
+            red: brewing ? magic.0 : 0.25 + pulse * 0.12,
+            green: brewing ? magic.1 : 0.83 + pulse * 0.10,
+            blue: brewing ? magic.2 : 0.69
         )
         cr.rectangle(
             x: cx - 86, y: cy - 32 + wave,
@@ -388,7 +423,8 @@ struct GameRenderer {
 
         // Bolhas ascendentes
         for i in 0..<9 {
-            let speed = 19.0 + Double(i % 4) * 7.0
+            let speed = (brewing ? 65.0 : 19.0)
+                + Double(i % 4) * 7.0
             let distance = (
                 t * speed + Double(i) * 21.0
             ).truncatingRemainder(dividingBy: 130.0)
@@ -437,10 +473,14 @@ struct GameRenderer {
         _ cr: Cairo.ContextRef,
         x: Double,
         y: Double,
-        time t: Double
+        time t: Double,
+        brewProgress: Double
     ) {
+        let casting = brewProgress >= 0 && brewProgress < 0.85
         let bob = sin(t * 2.0) * 3.0
-        let wandMove = sin(t * 3.0) * 9.0
+        let wandMove = casting
+            ? -18.0 + sin(t * 13.0) * 8.0
+            : sin(t * 3.0) * 9.0
         let blinkPhase = t.truncatingRemainder(
             dividingBy: 5.0
         )
@@ -653,4 +693,320 @@ struct GameRenderer {
         )
         cr.fill()
     }
+
+    // MARK: - Cores magicas
+
+    private static func potionRGB(
+        _ name: String
+    ) -> (Double, Double, Double) {
+        switch name {
+        case "moon": return (0.72, 0.48, 1.0)
+        case "healing": return (0.30, 0.95, 0.48)
+        case "mana": return (0.30, 0.65, 1.0)
+        case "mystery": return (0.90, 0.43, 0.32)
+        default: return (0.28, 0.88, 0.81)
+        }
+    }
+
+    // MARK: - Feitico da varinha ao caldeirao
+
+    private static func drawSpell(
+        _ cr: Cairo.ContextRef,
+        width w: Double,
+        height h: Double,
+        time t: Double,
+        progress p: Double,
+        color: String
+    ) {
+        let c = potionRGB(color)
+
+        let startX = w * 0.20 + 55
+        let startY = h * 0.59 - 43
+        let endX = w * 0.52
+        let endY = h * 0.62 - 45
+
+        let travel = max(0, min(1, p / 0.58))
+        let eased = travel * travel * (3 - 2 * travel)
+
+        if p < 0.70 {
+            for i in 0..<10 {
+                let q = max(0, eased - Double(i) * 0.04)
+                let x = startX + (endX - startX) * q
+                let y = startY + (endY - startY) * q
+                    - sin(q * Double.pi) * 48
+
+                cr.setSource(
+                    red: c.0, green: c.1, blue: c.2,
+                    alpha: max(0.15, 1 - Double(i) * 0.08)
+                )
+                cr.rectangle(
+                    x: x, y: y,
+                    width: i == 0 ? 14 : 5,
+                    height: i == 0 ? 14 : 5
+                )
+                cr.fill()
+            }
+        }
+
+        if p >= 0.55 {
+            let burst = min(1, (p - 0.55) / 0.25)
+            let fade = max(0, 1 - (p - 0.55) / 0.45)
+
+            for i in 0..<16 {
+                let angle = Double(i) * Double.pi * 2 / 16
+                let radius = burst * 100
+                let x = endX + cos(angle) * radius
+                let y = endY + sin(angle) * radius * 0.65
+
+                cr.setSource(
+                    red: c.0, green: c.1, blue: c.2,
+                    alpha: fade
+                )
+                cr.rectangle(
+                    x: x, y: y,
+                    width: 7, height: 7
+                )
+                cr.fill()
+            }
+        }
+    }
+
+
+    // MARK: - Inventario pixel art
+
+    private static let ingredientNames = [
+        "Flor lunar",
+        "Cristal azul",
+        "Cogumelo",
+        "Erva mistica"
+    ]
+
+    private static func drawInventory(
+        _ cr: Cairo.ContextRef,
+        width w: Double,
+        height h: Double,
+        time t: Double,
+        selected: [String],
+        brewing: [String],
+        progress: Double
+    ) {
+        let slotSize = 52.0
+        let gap = 12.0
+        let total = slotSize * 4 + gap * 3
+        let left = (w - total) / 2
+        let top = h * 0.835
+
+        // Painel escuro com moldura
+        pixelRect(cr, left - 16, top - 12,
+                  total + 32, 77,
+                  0.09, 0.07, 0.15)
+        pixelRect(cr, left - 12, top - 8,
+                  total + 24, 69,
+                  0.29, 0.20, 0.39)
+        pixelRect(cr, left - 8, top - 4,
+                  total + 16, 61,
+                  0.14, 0.11, 0.23)
+
+        for (index, name) in ingredientNames.enumerated() {
+            let x = left + Double(index) * (slotSize + gap)
+            let isSelected = selected.contains(name)
+            let isFlying = progress >= 0
+                && progress < 1
+                && brewing.contains(name)
+
+            let border: (Double, Double, Double) =
+                isSelected || isFlying
+                ? (0.98, 0.78, 0.31)
+                : (0.42, 0.34, 0.56)
+
+            pixelRect(cr, x, top, slotSize, slotSize,
+                      border.0, border.1, border.2)
+            pixelRect(cr, x + 4, top + 4,
+                      slotSize - 8, slotSize - 8,
+                      0.12, 0.10, 0.20)
+
+            // Numero do slot
+            pixelRect(cr, x + 4, top + 4, 7, 7,
+                      0.62, 0.54, 0.75)
+
+            if !isFlying {
+                let bob = isSelected ? sin(t * 4) * 2 : 0
+                drawIngredient(
+                    cr,
+                    name: name,
+                    x: x + slotSize / 2,
+                    y: top + slotSize / 2 + bob,
+                    scale: 1.0
+                )
+            }
+
+            if isSelected || isFlying {
+                pixelRect(cr, x + 10, top + 46,
+                          32, 3,
+                          1.0, 0.84, 0.38)
+            }
+        }
+
+        // Os ingredientes voam em momentos diferentes
+        // durante a primeira parte do feitico.
+        if progress >= 0 && progress < 1 {
+            for (index, name) in brewing.enumerated() {
+                guard let slot = ingredientNames.firstIndex(of: name)
+                else { continue }
+
+                let startX = left
+                    + Double(slot) * (slotSize + gap)
+                    + slotSize / 2
+                let startY = top + slotSize / 2
+
+                let delay = Double(index) * 0.13
+                let q = max(0, min(1, (progress - delay) / 0.52))
+                let ease = q * q * (3 - 2 * q)
+
+                // Nao desenhar depois de entrar no caldeirao
+                if q >= 1 { continue }
+
+                let endX = w * 0.52
+                let endY = h * 0.62 - 26
+
+                let x = startX + (endX - startX) * ease
+                let y = startY + (endY - startY) * ease
+                    - sin(ease * Double.pi) * 62
+
+                // Rastro de brilho
+                for j in 1...4 {
+                    let trailQ = max(0, ease - Double(j) * 0.04)
+                    let tx = startX + (endX - startX) * trailQ
+                    let ty = startY + (endY - startY) * trailQ
+                        - sin(trailQ * Double.pi) * 62
+
+                    pixelRect(cr, tx, ty, 4, 4,
+                              0.98, 0.84, 0.42,
+                              0.8 - Double(j) * 0.14)
+                }
+
+                drawIngredient(
+                    cr,
+                    name: name,
+                    x: x,
+                    y: y,
+                    scale: 1.0 + sin(ease * Double.pi) * 0.3
+                )
+            }
+        }
+    }
+
+    // MARK: - Desenhos dos quatro ingredientes
+
+    private static func drawIngredient(
+        _ cr: Cairo.ContextRef,
+        name: String,
+        x: Double,
+        y: Double,
+        scale: Double
+    ) {
+        // Desenha em coordenadas locais sem usar
+        // transformacoes indisponiveis nesta versao do Cairo.
+        func pixelRect(
+            _ cr: Cairo.ContextRef,
+            _ px: Double,
+            _ py: Double,
+            _ pw: Double,
+            _ ph: Double,
+            _ red: Double,
+            _ green: Double,
+            _ blue: Double
+        ) {
+            GameRenderer.pixelRect(
+                cr,
+                x + px * scale,
+                y + py * scale,
+                pw * scale,
+                ph * scale,
+                red,
+                green,
+                blue
+            )
+        }
+
+        switch name {
+        case "Flor lunar":
+            // Petalas violetas
+            let petals: [(Double, Double)] = [
+                (-6, -12), (3, -12),
+                (-14, -3), (11, -3),
+                (-6, 7), (3, 7)
+            ]
+            for (px, py) in petals {
+                pixelRect(cr, px, py, 11, 11,
+                          0.71, 0.46, 0.96)
+            }
+            pixelRect(cr, -5, -3, 10, 10,
+                      1.0, 0.89, 0.46)
+            pixelRect(cr, -2, 9, 4, 12,
+                      0.28, 0.76, 0.43)
+
+        case "Cristal azul":
+            pixelRect(cr, -7, -17, 14, 7,
+                      0.58, 0.90, 1.0)
+            pixelRect(cr, -12, -10, 24, 18,
+                      0.22, 0.62, 0.97)
+            pixelRect(cr, -7, 8, 14, 8,
+                      0.16, 0.43, 0.81)
+            pixelRect(cr, -3, -11, 5, 19,
+                      0.78, 0.97, 1.0)
+
+        case "Cogumelo":
+            pixelRect(cr, -7, 0, 14, 17,
+                      0.94, 0.81, 0.64)
+            pixelRect(cr, -15, -11, 30, 15,
+                      0.75, 0.30, 0.56)
+            pixelRect(cr, -9, -17, 18, 8,
+                      0.88, 0.42, 0.69)
+            pixelRect(cr, -7, -10, 5, 5,
+                      1.0, 0.88, 0.93)
+            pixelRect(cr, 6, -7, 5, 5,
+                      1.0, 0.88, 0.93)
+
+        case "Erva mistica":
+            pixelRect(cr, -2, -16, 5, 34,
+                      0.39, 0.82, 0.43)
+            pixelRect(cr, -16, -11, 14, 9,
+                      0.31, 0.70, 0.38)
+            pixelRect(cr, 3, -7, 14, 9,
+                      0.46, 0.91, 0.49)
+            pixelRect(cr, -14, 4, 12, 8,
+                      0.46, 0.91, 0.49)
+            pixelRect(cr, 3, 7, 12, 8,
+                      0.31, 0.70, 0.38)
+
+        default:
+            break
+        }
+
+    }
+
+    // MARK: - Retangulos pixel art
+
+    private static func pixelRect(
+        _ cr: Cairo.ContextRef,
+        _ x: Double,
+        _ y: Double,
+        _ w: Double,
+        _ h: Double,
+        _ red: Double,
+        _ green: Double,
+        _ blue: Double,
+        _ alpha: Double = 1.0
+    ) {
+        cr.setSource(
+            red: red,
+            green: green,
+            blue: blue,
+            alpha: alpha
+        )
+        cr.rectangle(x: x, y: y, width: w, height: h)
+        cr.fill()
+    }
+
 }

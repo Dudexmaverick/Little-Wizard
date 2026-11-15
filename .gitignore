@@ -6,3 +6,12 @@ backups/
 *.swp
 *.swo
 .vscode/
+
+# Swift
+.build/
+.swiftpm/
+
+# Arquivos temporarios
+*.log
+*.backup
+backups/

@@ -1,12 +1,10 @@
+
 import Gtk
 import Cairo
 import Foundation
 import GLib
 
-// MARK: - Estado do jogo
-
 let game = GameState()
-
 let animationClock = ProcessInfo.processInfo.systemUptime
 
 var brewing = false
@@ -16,46 +14,28 @@ var brewingSelection: [String] = []
 
 let brewDuration = 2.4
 
-// MARK: - Aplicacao
-
 let status = Application.run(startupHandler: nil) { app in
 
     let window = ApplicationWindowRef(application: app)
-
     window.title = "Little Wizard — Potion Lab"
-    window.setDefaultSize(width: 960, height: 650)
+    window.setDefaultSize(width: 1240, height: 720)
+
+    // MARK: - Layout principal
 
     let layout = BoxRef(
-        orientation: .vertical,
-        spacing: 10
+        orientation: .horizontal,
+        spacing: 0
     )
 
-    let title = LabelRef(
-        str: "🧙 LITTLE WIZARD — POTION LAB 🧪"
-    )
-
-    layout.append(child: title)
-
-    let scoreLabel = LabelRef(
-        str: "Pontos: 0 | Moedas: 0 | Receitas: 0/\(game.totalRecipes)"
-    )
-
-    layout.append(child: scoreLabel)
-
-    // MARK: - Area grafica
+    // MARK: - Cenario
 
     let drawingArea = DrawingAreaRef()
-
-    drawingArea.setSizeRequest(
-        width: 850,
-        height: 430
-    )
-
+    drawingArea.setSizeRequest(width: 800, height: 600)
     drawingArea.setHexpand(expand: true)
     drawingArea.setVexpand(expand: true)
 
-    var sceneWidth = 850.0
-    var sceneHeight = 430.0
+    var sceneWidth = 800.0
+    var sceneHeight = 600.0
 
     drawingArea.setDrawFunc { _, context, width, height in
 
@@ -90,15 +70,137 @@ let status = Application.run(startupHandler: nil) { app in
 
     layout.append(child: drawingArea)
 
+    // MARK: - Barra lateral
+
+    let sidebar = BoxRef(
+        orientation: .vertical,
+        spacing: 14
+    )
+
+    sidebar.setSizeRequest(width: 330, height: -1)
+
+    let heading = LabelRef(
+        str: "🧪 MESA DE ALQUIMIA"
+    )
+
+    let subtitle = LabelRef(
+        str: "✨ Little Wizard · Potion Lab ✨"
+    )
+
+    sidebar.append(child: heading)
+    sidebar.append(child: subtitle)
+
+    // MARK: - Estatisticas
+
+    let stats = BoxRef(
+        orientation: .vertical,
+        spacing: 10
+    )
+
+    let scoreLabel = LabelRef(str: "⭐ Pontos: 0")
+    let coinsLabel = LabelRef(str: "🪙 Moedas: 0")
+    let recipesLabel = LabelRef(
+        str: "📖 Receitas: 0/\(game.totalRecipes)"
+    )
+
+    stats.append(child: scoreLabel)
+    stats.append(child: coinsLabel)
+    stats.append(child: recipesLabel)
+
+    sidebar.append(child: stats)
+
+    // MARK: - Ingredientes
+
+    let ingredientsHeading = LabelRef(
+        str: "✨ INGREDIENTES SELECIONADOS"
+    )
+
+    let firstIngredient = LabelRef(
+        str: "① Escolha um ingrediente"
+    )
+
+    let secondIngredient = LabelRef(
+        str: "② Escolha outro ingrediente"
+    )
+
+    sidebar.append(child: ingredientsHeading)
+    sidebar.append(child: firstIngredient)
+    sidebar.append(child: secondIngredient)
+
+    // MARK: - Estado da pocao
+
+    let panelStatus = LabelRef(
+        str: "🌙 Aguardando ingredientes..."
+    )
+
+    sidebar.append(child: panelStatus)
+
+    // MARK: - Botoes
+
+    let prepareButton = ButtonRef(
+        label: "🧪 PREPARAR POÇÃO"
+    )
+
+    let restartButton = ButtonRef(
+        label: "🔄 Reiniciar partida"
+    )
+
+    sidebar.append(child: prepareButton)
+    sidebar.append(child: restartButton)
+
     // MARK: - Mensagens
 
-    let messageLabel = LabelRef(str: game.message)
+    let messageHeading = LabelRef(
+        str: "📜 MENSAGEM DO MAGUINHO"
+    )
 
-    layout.append(child: messageLabel)
+    let messageLabel = LabelRef(
+        str: game.message
+    )
+
+    sidebar.append(child: messageHeading)
+    sidebar.append(child: messageLabel)
+
+    layout.append(child: sidebar)
+
+    // MARK: - Atualizacao da interface
 
     let refresh = {
+
         scoreLabel.setText(
-            str: "Pontos: \(game.score) | Moedas: \(game.coins) | Receitas: \(game.discovered.count)/\(game.totalRecipes)"
+            str: "⭐ Pontos: \(game.score)"
+        )
+
+        coinsLabel.setText(
+            str: "🪙 Moedas: \(game.coins)"
+        )
+
+        recipesLabel.setText(
+            str: "📖 Receitas: \(game.discovered.count)/\(game.totalRecipes)"
+        )
+
+        let selected = game.selected.map(\.rawValue)
+
+        firstIngredient.setText(
+            str: selected.count > 0
+                ? "① \(selected[0])"
+                : "① Escolha um ingrediente"
+        )
+
+        secondIngredient.setText(
+            str: selected.count > 1
+                ? "② \(selected[1])"
+                : "② Escolha outro ingrediente"
+        )
+
+        panelStatus.setText(
+            str: brewing
+                ? "✨ Preparando poção..."
+                : (
+                    selected.count == 2
+                    ? "🟢 Pronto para preparar!"
+                    : "🌙 Aguardando ingredientes..."
+                )
         )
 
         messageLabel.setText(str: game.message)
@@ -116,8 +218,6 @@ let status = Application.run(startupHandler: nil) { app in
             refresh()
             return
         }
-
-        let combination = Set(game.selected)
 
         if let recipe = PotionLibrary.find(
             ingredients: game.selected
@@ -140,82 +240,19 @@ let status = Application.run(startupHandler: nil) { app in
         refresh()
     }
 
-    // MARK: - Janela de alquimia
+    prepareButton.onClicked { _ in
+        preparePotion()
+    }
 
-    var alchemyWindow: ApplicationWindowRef?
-
-    let showAlchemyWindow = {
+    restartButton.onClicked { _ in
 
         guard !brewing else { return }
-        guard game.selected.count == 2 else { return }
 
-        if let existing = alchemyWindow {
-            existing.set(visible: false)
-        }
+        game.restart()
+        activePotionColor = "turquoise"
+        brewingSelection.removeAll()
 
-        let popup = ApplicationWindowRef(application: app)
-
-        popup.title = "🧪 Mesa de Alquimia"
-        popup.setDefaultSize(width: 380, height: 220)
-
-        let popupLayout = BoxRef(
-            orientation: .vertical,
-            spacing: 12
-        )
-
-        let heading = LabelRef(
-            str: "✨ PREPARAR POCAO? ✨"
-        )
-
-        popupLayout.append(child: heading)
-
-        let selectedText = game.selected
-            .map(\.rawValue)
-            .joined(separator: " + ")
-
-        let selectedLabel = LabelRef(
-            str: selectedText
-        )
-
-        popupLayout.append(child: selectedLabel)
-
-        let buttons = BoxRef(
-            orientation: .horizontal,
-            spacing: 12
-        )
-
-        let prepare = ButtonRef(
-            label: "🧪 Preparar pocao"
-        )
-
-        let restart = ButtonRef(
-            label: "🔄 Reiniciar"
-        )
-
-        prepare.onClicked { _ in
-            popup.set(visible: false)
-            preparePotion()
-        }
-
-        restart.onClicked { _ in
-            popup.set(visible: false)
-
-            game.restart()
-            activePotionColor = "turquoise"
-            brewingSelection.removeAll()
-
-            refresh()
-        }
-
-        buttons.append(child: prepare)
-        buttons.append(child: restart)
-
-        popupLayout.append(child: buttons)
-
-        popup.set(child: popupLayout)
-        popup.set(visible: true)
-
-        alchemyWindow = popup
+        refresh()
     }
 
     // MARK: - Inventario clicavel
@@ -233,16 +270,11 @@ let status = Application.run(startupHandler: nil) { app in
 
         guard !brewing else { return }
 
-        // Coordenadas utilizadas pelo GameRenderer.
         let slotSize = 52.0
         let gap = 12.0
+        let totalWidth = slotSize * 4 + gap * 3
 
-        let totalWidth =
-            slotSize * 4 + gap * 3
-
-        let left =
-            (sceneWidth - totalWidth) / 2
-
+        let left = (sceneWidth - totalWidth) / 2
         let top = sceneHeight * 0.835
 
         guard y >= top,
@@ -259,19 +291,14 @@ let status = Application.run(startupHandler: nil) { app in
                x <= slotX + slotSize {
 
                 game.select(ingredientOrder[index])
-
                 refresh()
-
-                if game.selected.count == 2 {
-                    showAlchemyWindow()
-                }
-
                 break
             }
         }
     }
 
-    // Mantem o controlador vivo durante a execucao.
+    // MARK: - Iniciar janela
+
     withExtendedLifetime(clickController) {
         window.set(child: layout)
         window.set(visible: true)
@@ -299,7 +326,6 @@ let status = Application.run(startupHandler: nil) { app in
         }
 
         drawingArea.queueDraw()
-
         return true
     }
 }
